@@ -13,6 +13,7 @@ A raffle game where participants enter by sending ETH to the contract. Once it r
 - [Ganache](https://trufflesuite.com/ganache/index.html)
 - [Node.js](https://nodejs.org/en/)
 - [NPM](https://www.npmjs.com/)
+- MetaMask
 
 # Installation
 - Clone the repo
@@ -22,6 +23,7 @@ A raffle game where participants enter by sending ETH to the contract. Once it r
 - Install contract dependencies
     - `npm install`
 - Open Ganache and create a local Ethereum blockchain
+- Import test accounts to the Ganache network on MetaMask
 - Compile and migrate the contract
     - `truffle compile`
     - `truffle migrate`
