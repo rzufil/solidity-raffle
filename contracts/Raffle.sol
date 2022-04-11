@@ -2,31 +2,8 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
-library Strings {
-    function toString(uint256 value) internal pure returns (string memory) {
-        if (value == 0) {
-            return "0";
-        }
-        uint i = value;
-        uint len;
-        while (i != 0) {
-            len++;
-            i /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint j = len;
-        while (value != 0) {
-            j = j - 1;
-            uint8 temp = (48 + uint8(value - value / 10 * 10));
-            bytes1 b1 = bytes1(temp);
-            bstr[j] = b1;
-            value /= 10;
-        }
-        return string(bstr);
-    }
-}
 
 contract Raffle is Ownable {
     using SafeMath for uint256;
@@ -74,7 +51,7 @@ contract Raffle is Ownable {
     }
 
     function enter(string memory _playerName) public payable {
-        require(msg.value == joiningFee, string(bytes.concat("Joining fee is ", bytes(joiningFee.toString()), " wei")));
+        require(msg.value == joiningFee, string(bytes.concat("Joining fee is ", bytes(Strings.toString(joiningFee)), " wei")));
 
         Player memory newPlayer = Player(payable(msg.sender), _playerName);
         entries.push(newPlayer);
