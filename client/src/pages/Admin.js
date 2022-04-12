@@ -9,6 +9,7 @@ import "../App.css";
 const Admin = () => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [paused, setPaused] = useState(undefined);
   const [joiningFee, setJoiningFee] = useState("");
   const [maxPlayers, setMaxPlayers] = useState("");
   const [gameFee, setGameFee] = useState("");
@@ -38,6 +39,11 @@ const Admin = () => {
     );
     setContract(contract);
     return contract;
+  };
+
+  const loadInfo = async (contract) => {
+    const pause = await contract.methods.pause().call();
+    setPaused(pause);
   };
 
   const changeJoiningFee = async () => {
@@ -85,9 +91,22 @@ const Admin = () => {
     await contract.methods.withdraw(addressTo).send({ from: accounts[0] }, async (error) => {
       if (!error) {
         setAddressTo("");
-        setSuccessMessage("Withdraw successful");
+        setSuccessMessage("Withdraw successful.");
       } else {
         setErrorMessage(`An error occurred while withdrawing. ${error.message}`);
+      }
+    });
+  };
+
+  const pauseRaffle = async () => {
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    await contract.methods.schedulePause().send({ from: accounts[0] }, async (error) => {
+      if (!error) {
+        setPaused(!paused);
+        setSuccessMessage(paused ? "Raffle has been unpaused." : "Raffle has been paused.");
+      } else {
+        setErrorMessage(`An error occurred while pausing the raffle. ${error.message}`);
       }
     });
   };
@@ -112,9 +131,10 @@ const Admin = () => {
   useEffect(async () => {
     try {
       const web3 = await loadWeb3();
-      await loadWeb3Contract(web3);
-      await loadWeb3Accounts(web3);
-      listenForAccountChange();
+      const contract = await loadWeb3Contract(web3);
+      const accounts = await loadWeb3Accounts(web3);
+      await loadInfo(contract);
+      listenForAccountChange(accounts);
     } catch (error) {
       alert(
         `Failed to load web3, accounts, or contract. Check console for details.`,
@@ -128,7 +148,7 @@ const Admin = () => {
   } else if (!admin) {
     return (
       <div className="App">
-        <Nav account={accounts[0]} />
+        <Nav account={accounts[0]} admin={admin} />
         <div className="container-fluid mt-5">
           <div className="row mt-1">
             <div className="col d-flex flex-column align-items-center">
@@ -141,7 +161,7 @@ const Admin = () => {
   } else {
     return (
       <div className="App">
-        <Nav account={accounts[0]} />
+        <Nav account={accounts[0]} admin={admin} />
         <div className="container-fluid mt-5">
           <div className="row mt-1">
             <div className="col d-flex flex-column align-items-center">
@@ -149,7 +169,7 @@ const Admin = () => {
             </div>
           </div>
           <div className="row mt-1">
-            <div className="col-sm-6 d-flex flex-column align-items-center mx-auto">
+            <div className="col-sm-6 mb-3 d-flex flex-column align-items-center mx-auto">
               <label htmlFor="joiningFee">Change Joining Fee</label>
               <input
                 type="text"
@@ -161,7 +181,7 @@ const Admin = () => {
               />
               <button className="btn btn-primary" onClick={changeJoiningFee}>Submit</button>
             </div>
-            <div className="col-sm-6 d-flex flex-column align-items-center mx-auto">
+            <div className="col-sm-6 mb-3 d-flex flex-column align-items-center mx-auto">
               <label htmlFor="gameFee">Change Max Players</label>
               <input
                 type="text"
@@ -175,7 +195,7 @@ const Admin = () => {
             </div>
           </div>
           <div className="row mt-1">
-            <div className="col-sm-6 d-flex flex-column align-items-center mx-auto">
+            <div className="col-sm-6 mb-3 d-flex flex-column align-items-center mx-auto">
               <label htmlFor="gameFee">Change Game Fee</label>
               <input
                 type="text"
@@ -187,7 +207,7 @@ const Admin = () => {
               />
               <button className="btn btn-primary" onClick={changeGameFee}>Submit</button>
             </div>
-            <div className="col-sm-6 d-flex flex-column align-items-center mx-auto">
+            <div className="col-sm-6 mb-3 d-flex flex-column align-items-center mx-auto">
               <label>Withdraw</label>
               <input
                 type="text"
@@ -197,6 +217,13 @@ const Admin = () => {
                 placeholder="Address"
               />
               <button className="btn btn-primary" onClick={withdraw}>Submit</button>
+            </div>
+          </div>
+          <div className="row mt-1">
+            <div className="col-sm-12 mb-3 d-flex flex-column align-items-center mx-auto">
+              {(paused === undefined)
+                ? <button className="btn btn-primary">Loading...</button>
+                : <button className="btn btn-primary" onClick={pauseRaffle}>{paused ? "Unpause Raffle" : "Pause Raffle"}</button>}
             </div>
           </div>
           <div className="row mt-1">

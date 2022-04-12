@@ -13,9 +13,15 @@ contract Raffle is Ownable {
     uint256 public maxPlayers;
     uint256 public joiningFee;
     uint256 public gameFee;
+    bool public pause;
+    bool public scheduledPause;
 
-    event RaffleEnded(uint256 timestamp, string winner, uint256 amount);
-    event PlayerEntered(uint256 timestamp, string playerName);
+    event RaffleEvent(uint256 timestamp, bool win, string name, uint256 amount);
+
+    modifier raffleNotPaused() {
+        require(pause == false, "Raffle is currently paused.");
+        _;
+    }
 
     struct Player {
         address payable playerAddress;
@@ -26,6 +32,8 @@ contract Raffle is Ownable {
         maxPlayers = 5;
         joiningFee = 1000000000000000000 wei;
         gameFee = 5;
+        pause = false;
+        scheduledPause = false;
     }
 
     function changeMaxPlayers(uint256 newMaxPlayers) public onlyOwner {
@@ -40,6 +48,24 @@ contract Raffle is Ownable {
         gameFee = newGameFee;
     }
 
+    function pauseGame() internal {
+        pause = !pause;
+        scheduledPause = false;
+    }
+
+    function unpauseGame() public onlyOwner {
+        require(pause == true, "Raffle is already paused.");
+        pause = !pause;
+    }
+
+    function schedulePause() public onlyOwner {
+        if (entries.length == 0) {
+            pauseGame();
+        } else {
+            scheduledPause = true;
+        }
+    }
+
     function pickWinner() private view returns(uint256) {
         uint256 random = uint256(keccak256(abi.encodePacked(block.difficulty, block.timestamp, msg.sender)));
         uint256 index = random % participants();
@@ -50,13 +76,13 @@ contract Raffle is Ownable {
         return prize.sub(prize.div(100).mul(gameFee));
     }
 
-    function enter(string memory _playerName) public payable {
-        require(msg.value == joiningFee, string(bytes.concat("Joining fee is ", bytes(Strings.toString(joiningFee)), " wei")));
+    function enter(string memory _playerName) public payable raffleNotPaused {
+        require(msg.value == joiningFee, string(bytes.concat("Joining fee is ", bytes(Strings.toString(joiningFee)), " wei.")));
 
         Player memory newPlayer = Player(payable(msg.sender), _playerName);
         entries.push(newPlayer);
         prize += msg.value;
-        emit PlayerEntered(block.timestamp, string(bytes.concat(bytes(_playerName), " has entered the raffle.")));
+        emit RaffleEvent(block.timestamp, false, _playerName, 0);
 
         if (participants() >= maxPlayers) {
             uint256 winnerIndex = pickWinner();
@@ -65,9 +91,11 @@ contract Raffle is Ownable {
 
             (bool success, ) = (winner).call{value: finalPrize}(""); 
             require(success, "Failed to withdraw money from the contact");
-
-            emit RaffleEnded(block.timestamp, entries[winnerIndex].playerName, finalPrize);
+            emit RaffleEvent(block.timestamp, true, entries[winnerIndex].playerName, finalPrize);
             prize = 0;
+            if (scheduledPause) {
+                pauseGame();
+            }
             delete entries;
         }
     }

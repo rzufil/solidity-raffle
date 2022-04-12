@@ -9,6 +9,8 @@ import "../App.css";
 
 const Home = () => {
   const [errorMessage, setErrorMessage] = useState(null);
+  const [paused, setPaused] = useState(undefined);
+  const [admin, setAdmin] = useState(false);
   const [events, setEvents] = useState([]);
   const [joiningFee, setJoiningFee] = useState("");
   const [maxPlayers, setMaxPlayers] = useState("");
@@ -50,10 +52,16 @@ const Home = () => {
     setPlayerCount(participants);
     const houseFee = await contract.methods.gameFee().call();
     setGameFee(houseFee);
+    const pause = await contract.methods.pause().call();
+    setPaused(pause);
   };
 
   const joinRaffle = () => {
     setErrorMessage(null);
+    if (!playerName.length) {
+      setErrorMessage("Missing player name.");
+      return;
+    }
     contract.methods.enter(playerName).send({ from: accounts[0], value: joiningFee }, async (error) => {
       if (!error) {
         window.location.reload();
@@ -76,34 +84,22 @@ const Home = () => {
 
   const loadContractEvents = async (web3, contract) => {
     let contractEvents = [];
-    const maxWinEvents = 3;
-    const maxPlayers = await contract.methods.maxPlayers().call();
-    const maxEnterEvents = maxWinEvents * maxPlayers;
-    const raffleEndedEvents = await contract.getPastEvents("RaffleEnded", {
+    const maxEvents = 20;
+    const raffleEvents = await contract.getPastEvents("RaffleEvent", {
       fromBlock: 0,
       toBlock: "latest"
     });
     // Limiting events
-    // Reverse the RaffleEnded event array and get the last 3 win events
-    await raffleEndedEvents.reverse().slice(0, maxWinEvents).map((data) => {
+    await raffleEvents.slice(0, maxEvents).map((data) => {
       let _event = [];
-      _event["message"] = `Raffle ended! ${data.returnValues["winner"]} has won ${web3.utils.fromWei(String(data.returnValues["amount"]), "ether")} ether!`;
+      _event["message"] = data.returnValues["win"]
+        ? `Raffle ended! ${data.returnValues["name"]} has won ${web3.utils.fromWei(String(data.returnValues["amount"]), "ether")} ether!`
+        : `${data.returnValues["name"]} has entered the raffle.`;
       _event["time"] = FormatDate(parseInt(data.returnValues["timestamp"]) + 1);
-      _event["win"] = true;
+      _event["win"] = data.returnValues["win"];
       contractEvents.push(_event);
     });
-    const playerEnteredEvents = await contract.getPastEvents("PlayerEntered", {
-      fromBlock: 0,
-      toBlock: "latest"
-    });
-    // Reverse the PlayerEntered event array and get the last 3 x 3 enter events
-    await playerEnteredEvents.reverse().slice(0, maxEnterEvents).map((data) => {
-      let _event = [];
-      _event["message"] = data.returnValues["playerName"];
-      _event["time"] = FormatDate(parseInt(data.returnValues["timestamp"]));
-      _event["win"] = false;
-      contractEvents.push(_event);
-    });
+    // Making sure events are ordered by date
     contractEvents.sort((a, b) => new Date(a["time"]).getTime() - new Date(b["time"]).getTime());
     setEvents(contractEvents.reverse());
   };
@@ -114,14 +110,25 @@ const Home = () => {
     })
   };
 
+  const checkIfAdmin = async () => {
+    const isAdmin = await contract.methods.owner().call();
+    setAdmin(isAdmin.toLowerCase() === accounts[0].toLowerCase());
+  };
+
+  useEffect(async () => {
+    if (accounts.length) {
+      checkIfAdmin();
+    }
+  }, [accounts]);
+
   useEffect(async () => {
     try {
       const web3 = await loadWeb3();
-      await loadWeb3Accounts(web3);
       const contract = await loadWeb3Contract(web3);
+      const accounts = await loadWeb3Accounts(web3);
       await loadInfo(contract);
       await loadContractEvents(web3, contract);
-      listenForAccountChange();
+      listenForAccountChange(accounts);
     } catch (error) {
       alert(
         `Failed to load web3, accounts, or contract. Check console for details.`,
@@ -135,10 +142,11 @@ const Home = () => {
   } else {
     return (
       <div className="App">
-        <Nav account={accounts[0]} />
+        <Nav account={accounts[0]} admin={admin} />
         <div className="container-fluid mt-5">
           <div className="row mt-1">
             <div className="col d-flex flex-column align-items-center">
+              {paused ? <p className="display-6 fw-bold bg-warning rounded-3 p-2">Raffle is currently paused. Please come back later.</p> : <></>}
               <h1 className="display-5 fw-bold">Rules</h1>
               <div className="col-6 mb-3 lead text-center">
                 <p>Joining fee is: {web3.utils.fromWei(String(joiningFee), "ether")} ETH</p>
@@ -152,12 +160,15 @@ const Home = () => {
             <div className="col d-flex flex-column align-items-center">
               <input
                 type="text"
-                className="mb-2"
+                className="mb-2 border p-1 rounded-3"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 placeholder="Your Name"
+                required
               />
-              <button className="btn btn-primary" onClick={joinRaffle}>Join Raffle</button>
+              {(paused === undefined)
+                ? <button className="btn btn-primary" disabled={true}>Loading...</button>
+                : <button className="btn btn-primary" onClick={joinRaffle} disabled={paused}>Join Raffle</button>}
             </div>
           </div>
           <div className="row mt-1">
